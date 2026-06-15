@@ -193,10 +193,19 @@
       padding: 12px;
       background: rgba(255,255,255,.02);
     }
-    .cost-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .check-row input[type="checkbox"] {
+      width: auto;
+      accent-color: var(--accent);
+    }
+    .check-row label {
+      margin: 0;
+      color: var(--text);
+      cursor: pointer;
     }
     @media (max-width: 1080px) {
       .wrap { grid-template-columns: 1fr; }
@@ -225,6 +234,11 @@
           </select>
         </div>
         <div class="tiny">Auto route: simple prompts use one model. Complex prompts use Claude → Groq → Gemini. High-risk prompts add verification.</div>
+        <div class="check-row">
+          <input id="thinkingMode" type="checkbox" />
+          <label for="thinkingMode">Thinking mode (deeper reasoning, more tokens)</label>
+        </div>
+        <div class="tiny">Forces full pipeline + verifier, adds a deep-reasoning step, and increases token budgets ~2.5×.</div>
       </div>
 
       <div class="section stack">
@@ -281,15 +295,16 @@
       </div>
 
       <div class="section stack">
-        <h3 style="font-size:1rem;">File uploads</h3>
+        <h3 style="font-size:1rem;">File uploads & PDF analyzer</h3>
         <div class="file-box stack">
           <div>
-            <label for="fileInput">Attach text files</label>
-            <input id="fileInput" type="file" multiple />
+            <label for="fileInput">Attach text files or PDFs</label>
+            <input id="fileInput" type="file" multiple accept=".txt,.md,.csv,.json,.js,.py,.html,.xml,.yaml,.yml,.log,.pdf,text/*,application/pdf" />
           </div>
-          <div class="tiny">Best for txt, md, csv, json, js, py, html, xml, yaml, logs, and code. Files are read locally in your browser and stored in the chat session after you send.</div>
+          <div class="tiny">Supports txt, md, csv, json, code files, and PDFs. PDF text is extracted in your browser before upload. Files are stored in the chat session after you send.</div>
           <div id="pendingFiles" class="mini-list"></div>
           <div class="toolbar">
+            <button id="analyzePdfBtn" class="btn secondary" type="button">Analyze PDF prompt</button>
             <button id="clearFilesBtn" class="btn secondary" type="button">Clear staged files</button>
           </div>
         </div>
@@ -358,7 +373,8 @@
           <li>Auto-router avoids unnecessary multi-model calls</li>
           <li>Older chat memory is compressed after several turns</li>
           <li>File content is chunked and only relevant snippets are reused</li>
-          <li>Search is optional, not forced</li>
+          <li>Thinking mode adds deep reasoning + verification</li>
+          <li>PDFs are parsed locally and chunked for retrieval</li>
         </ul>
       </div>
     </aside>
@@ -366,12 +382,13 @@
     <main class="main">
       <section class="card hero">
         <h1>Tri-Model Collective Chat</h1>
-        <p class="sub">Claude plans, Groq critiques, Gemini builds, and optional verification tightens the final answer. Search and files can ground responses only when needed.</p>
+        <p class="sub">Claude plans, Groq critiques, Gemini builds, and optional verification tightens the final answer. Upload PDFs for analysis, enable thinking mode for harder questions, and use search or files to ground responses when needed.</p>
         <div class="pill-row">
           <span class="pill">Local server</span>
           <span class="pill">Optional live web search</span>
           <span class="pill">Upload docs/context</span>
-          <span class="pill">Per-provider cost estimate</span>
+          <span class="pill">PDF analyzer</span>
+          <span class="pill">Thinking mode</span>
         </div>
       </section>
 
@@ -394,9 +411,15 @@
     </main>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
   <script>
     const $ = (id) => document.getElementById(id);
-    const storeKey = 'tri-model-chat-settings-v2';
+    const storeKey = 'tri-model-chat-settings-v3';
     let sessionId = localStorage.getItem('tri-model-session') || crypto.randomUUID();
     localStorage.setItem('tri-model-session', sessionId);
     let pendingAttachments = [];
@@ -404,6 +427,7 @@
 
     const defaults = {
       mode: 'auto',
+      thinking: false,
       webSearchMode: 'off',
       maxResults: 4,
       fetchPages: 2,
@@ -427,6 +451,7 @@
     function saveSettings(silent = false) {
       const data = {
         mode: $('mode').value,
+        thinking: $('thinkingMode').checked,
         webSearchMode: $('webSearchMode').value,
         maxResults: Number($('maxResults').value || 4),
         fetchPages: Number($('fetchPages').value || 2),
@@ -457,6 +482,7 @@
       const raw = localStorage.getItem(storeKey);
       const data = raw ? JSON.parse(raw) : defaults;
       $('mode').value = data.mode || defaults.mode;
+      $('thinkingMode').checked = Boolean(data.thinking);
       $('webSearchMode').value = data.webSearchMode || defaults.webSearchMode;
       $('maxResults').value = data.maxResults ?? defaults.maxResults;
       $('fetchPages').value = data.fetchPages ?? defaults.fetchPages;
@@ -486,6 +512,7 @@
         attachments: pendingAttachments,
         settings: {
           mode: $('mode').value,
+          thinking: $('thinkingMode').checked,
           models: {
             claude: $('claudeModel').value.trim(),
             groq: $('groqModel').value.trim(),
@@ -603,8 +630,12 @@
     }
 
     function addAssistantResult(result) {
+      const flags = [];
+      if (result.thinking) flags.push('thinking mode');
+      if (result.pdfMode) flags.push('PDF analyzer');
+      const flagText = flags.length ? ` · ${flags.join(' · ')}` : '';
       const meta = `
-        <div class="meta">Route used: <span class="route">${esc(result.route || 'unknown')}</span></div>
+        <div class="meta">Route used: <span class="route">${esc(result.route || 'unknown')}</span>${esc(flagText)}</div>
         ${usageHtml(result.usage)}
         ${costHtml(result.cost)}
         ${docsHtml(result.documents, result.addedDocuments)}
@@ -624,7 +655,8 @@
       pendingAttachments.forEach(file => {
         const node = document.createElement('div');
         node.className = 'mini-item';
-        node.innerHTML = `${esc(file.name)}<br>${(file.content || '').length} chars staged`;
+        const pdfNote = file.isPdf ? `<br>${file.pages || '?'} pages extracted` : '';
+        node.innerHTML = `${esc(file.name)}${pdfNote}<br>${(file.content || '').length} chars staged`;
         list.appendChild(node);
       });
     }
@@ -644,6 +676,40 @@
       });
     }
 
+    async function extractPdfText(file) {
+      if (!window.pdfjsLib) {
+        throw new Error('PDF library not loaded. Refresh the page and try again.');
+      }
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      const parts = [];
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+        const page = await pdf.getPage(pageNum);
+        const content = await page.getTextContent();
+        const text = content.items.map((item) => item.str).join(' ');
+        if (text.trim()) {
+          parts.push(`--- Page ${pageNum} ---\n${text.trim()}`);
+        }
+      }
+      const combined = parts.join('\n\n').slice(0, 20000);
+      if (!combined.trim()) {
+        throw new Error(`${file.name} has no extractable text (it may be scanned/image-only).`);
+      }
+      return combined;
+    }
+
+    async function readAttachment(file) {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const content = isPdf ? await extractPdfText(file) : await file.text();
+      return {
+        name: file.name,
+        type: isPdf ? 'application/pdf' : (file.type || 'text/plain'),
+        content: content.slice(0, 20000),
+        isPdf,
+        pages: isPdf ? (content.match(/--- Page \d+ ---/g) || []).length : 0,
+      };
+    }
+
     async function handleFilesSelected() {
       $('error').textContent = '';
       const files = Array.from($('fileInput').files || []);
@@ -656,18 +722,16 @@
       try {
         const loaded = [];
         for (const file of limited) {
-          const text = await file.text();
-          loaded.push({
-            name: file.name,
-            type: file.type || 'text/plain',
-            content: text.slice(0, 20000)
-          });
+          loaded.push(await readAttachment(file));
         }
         pendingAttachments = loaded;
         renderPendingFiles();
-        $('status').textContent = `${pendingAttachments.length} file(s) staged. They will be added on next send.`;
+        const pdfCount = loaded.filter((f) => f.isPdf).length;
+        $('status').textContent = pdfCount
+          ? `${loaded.length} file(s) staged (${pdfCount} PDF). They will be added on next send.`
+          : `${loaded.length} file(s) staged. They will be added on next send.`;
       } catch (err) {
-        $('error').textContent = 'Could not read one or more files. Use text-like files for now.';
+        $('error').textContent = err.message || 'Could not read one or more files.';
       }
     }
 
@@ -730,6 +794,16 @@
       $('error').textContent = '';
       addMessage('assistant', 'New session ready. Your old files are not carried into this chat.');
     });
+    $('analyzePdfBtn').addEventListener('click', () => {
+      $('thinkingMode').checked = true;
+      $('prompt').value = 'Analyze the uploaded PDF(s). Provide:\n1. A concise overview\n2. Main sections or themes\n3. Key facts, numbers, and conclusions\n4. Risks, gaps, or ambiguities\n5. A direct answer to any question I ask\n\nCite page numbers like [Page N] when possible.';
+      if (!pendingAttachments.some((f) => f.isPdf)) {
+        $('status').textContent = 'Load a PDF first, then send. Thinking mode is on.';
+      } else {
+        $('status').textContent = 'PDF analyze prompt loaded. Thinking mode is on. Press Send.';
+      }
+      $('prompt').focus();
+    });
     $('sendBtn').addEventListener('click', sendMessage);
     $('demoBtn').addEventListener('click', () => {
       $('webSearchMode').value = 'auto';
@@ -745,7 +819,7 @@
     loadSettings();
     renderPendingFiles();
     renderSessionDocs();
-    addMessage('assistant', 'Ready. Add your API keys, optionally turn on web grounding, and upload text files if you want session context. Ctrl/Cmd + Enter sends.');
+    addMessage('assistant', 'Ready. Add API keys, upload text or PDF files, enable thinking mode for harder questions, and use Analyze PDF prompt for document summaries. Ctrl/Cmd + Enter sends.');
   </script>
 </body>
 </html>

@@ -21,6 +21,7 @@ USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Ge
 
 DEFAULT_SETTINGS = {
     "mode": "auto",
+    "thinking": False,
     "models": {
         "claude": "claude-3-5-haiku-latest",
         "groq": "llama-3.1-8b-instant",
@@ -30,6 +31,7 @@ DEFAULT_SETTINGS = {
     "budgets": {
         "planner": 180,
         "research": 260,
+        "reason": 900,
         "builder": 620,
         "verifier": 320,
         "summary": 160,
@@ -97,6 +99,54 @@ Return the final answer only."""
 SUMMARY_SYSTEM = """Compress the conversation into a short memory note.
 Return 4-6 bullets, each under 14 words.
 Keep only durable goals, decisions, constraints, and unresolved items."""
+
+REASON_SYSTEM = """You are the deep reasoner in a multi-model pipeline.
+Think step by step before others build the final answer.
+Cover key constraints, alternatives, tradeoffs, pitfalls, and what evidence supports each conclusion.
+Be thorough and structured. Use clear sections or numbered steps.
+Do not write the final user-facing answer yet."""
+
+PLANNER_SYSTEM_THINKING = """You are the planner in a multi-model pipeline.
+Return STRICT JSON only.
+Schema:
+{
+  \"intent\": \"\",
+  \"approach\": [\"\", \"\", \"\"],
+  \"needs_research\": [\"\", \"\", \"\"],
+  \"risks\": [\"\", \"\", \"\"],
+  \"answer_style\": \"\"
+}
+Rules: no markdown, up to 3 items per array, each item under 20 words."""
+
+RESEARCH_SYSTEM_THINKING = """You are the critic/researcher in a multi-model pipeline.
+Use provided grounded context if available.
+Do NOT claim live web access unless sources are explicitly provided in the prompt.
+Return STRICT JSON only.
+Schema:
+{
+  \"facts\": [\"\", \"\", \"\"],
+  \"assumptions\": [\"\", \"\", \"\"],
+  \"checks\": [\"\", \"\", \"\"],
+  \"build_notes\": [\"\", \"\", \"\"]
+}
+Rules: no markdown, up to 3 items per array, each item under 24 words."""
+
+BUILDER_SYSTEM_THINKING = """You are the synthesizer. Build the final response using the user request, reasoning notes, and peer handoffs.
+Be accurate, thorough, and well structured.
+If grounded sources are provided, use only supported claims and cite them exactly as instructed.
+For PDF or document excerpts, cite like [D1] or [Page N] when page markers are present.
+If something is uncertain, say so briefly instead of guessing.
+Return the final answer only, with clean formatting."""
+
+VERIFIER_SYSTEM_THINKING = """You are the final verifier.
+Improve the draft, remove overclaims, and preserve only supported content.
+If grounded sources are provided, keep only valid citations and do not invent any.
+Return a polished, complete final answer."""
+
+PDF_ANALYZER_SYSTEM = """You are a document analyst specializing in PDFs and long-form text.
+Extract structure, key facts, conclusions, risks, and open questions from the provided document excerpts.
+Use only information supported by the excerpts. Cite excerpts like [D1] or [Page N] when page markers exist.
+If the document is incomplete or OCR-like, say so briefly."""
 
 
 class VisibleTextExtractor(HTMLParser):
@@ -221,7 +271,48 @@ def build_context_pack(session):
     return trim_text(packed, MAX_CONTEXT_CHARS)
 
 
-def choose_route(message, mode):
+def is_thinking_enabled(settings):
+    return bool((settings or {}).get("thinking"))
+
+
+def has_pdf_attachments(attachments):
+    for attachment in attachments or []:
+        name = (attachment.get("name") or "").lower()
+        mime = (attachment.get("type") or "").lower()
+        if name.endswith(".pdf") or mime == "application/pdf":
+            return True
+    return False
+
+
+def effective_budgets(settings):
+    base = settings.get("budgets") or DEFAULT_SETTINGS["budgets"]
+    if not is_thinking_enabled(settings):
+        return base
+    scaled = {}
+    for key, value in base.items():
+        scaled[key] = max(120, int(value * 2.5))
+    return scaled
+
+
+def pipeline_systems(settings):
+    if is_thinking_enabled(settings):
+        return {
+            "planner": PLANNER_SYSTEM_THINKING,
+            "research": RESEARCH_SYSTEM_THINKING,
+            "builder": BUILDER_SYSTEM_THINKING,
+            "verifier": VERIFIER_SYSTEM_THINKING,
+        }
+    return {
+        "planner": PLANNER_SYSTEM,
+        "research": RESEARCH_SYSTEM,
+        "builder": BUILDER_SYSTEM,
+        "verifier": VERIFIER_SYSTEM,
+    }
+
+
+def choose_route(message, mode, thinking=False):
+    if thinking:
+        return "collective"
     if mode == "groq_only":
         return "groq_only"
     if mode == "triad":
@@ -641,18 +732,45 @@ def make_research_prompt(message, context_pack, plan_text, grounded_text):
     ).strip()
 
 
-def make_builder_prompt(message, context_pack, plan_text, research_text, grounded_text):
+def make_reason_prompt(message, context_pack, plan_text, research_text, grounded_text):
     return (
         f"{context_pack}\n\nLatest user request:\n{message}\n\n"
         f"Planner handoff:\n{plan_text}\n\n"
         f"Researcher handoff:\n{research_text}\n\n"
         f"Grounded context:\n{grounded_text or 'None'}\n\n"
+        "Reason carefully before the final answer is built."
+    ).strip()
+
+
+def make_builder_prompt(message, context_pack, plan_text, research_text, grounded_text, reason_text=""):
+    reason_block = f"Reasoning notes:\n{reason_text}\n\n" if reason_text else ""
+    return (
+        f"{context_pack}\n\nLatest user request:\n{message}\n\n"
+        f"Planner handoff:\n{plan_text}\n\n"
+        f"Researcher handoff:\n{research_text}\n\n"
+        f"{reason_block}"
+        f"Grounded context:\n{grounded_text or 'None'}\n\n"
         "Instructions:\n"
         "- If web sources are provided, cite them inline like [1], [2].\n"
         "- If document snippets are provided, cite them like [D1], [D2].\n"
+        "- If page markers like --- Page N --- exist, cite like [Page N].\n"
         "- Do not invent citations.\n"
         "- If evidence is missing, say uncertain briefly.\n\n"
         "Write the best final answer for the user."
+    ).strip()
+
+
+def make_pdf_analyze_prompt(message, context_pack, grounded_text):
+    return (
+        f"{context_pack}\n\nLatest user request:\n{message}\n\n"
+        f"Document excerpts:\n{grounded_text or 'None'}\n\n"
+        "Analyze the document excerpts thoroughly. Provide:\n"
+        "1. Brief overview\n"
+        "2. Key sections or themes\n"
+        "3. Important facts, numbers, and conclusions\n"
+        "4. Risks, gaps, or ambiguities\n"
+        "5. Direct answer to the user's question if one was asked\n"
+        "Cite excerpts using [D1], [D2], or [Page N] when page markers are present."
     ).strip()
 
 
@@ -831,13 +949,30 @@ def session_document_list(session):
 
 
 def orchestrate(message, session, settings, api_keys, attachments=None):
+    attachments = attachments or []
     context_pack = build_context_pack(session)
-    route = choose_route(message, settings.get("mode", "auto"))
+    thinking = is_thinking_enabled(settings)
+    route = choose_route(message, settings.get("mode", "auto"), thinking=thinking)
+    systems = pipeline_systems(settings)
+    budgets = effective_budgets(settings)
+    pdf_mode = has_pdf_attachments(attachments) or any(
+        (doc.get("name") or "").lower().endswith(".pdf")
+        for doc in (session.get("documents") or {}).values()
+    )
     trace = []
     usage = usage_accumulator()
 
-    added_documents = ingest_attachments(session, attachments or [], settings)
-    doc_grounding = build_document_grounding(message, session, settings)
+    added_documents = ingest_attachments(session, attachments, settings)
+    doc_settings = settings
+    if pdf_mode:
+        doc_cfg = settings.get("documents") or {}
+        doc_settings = deep_merge(settings, {
+            "documents": {
+                "top_chunks": max(6, int(doc_cfg.get("top_chunks") or 4)),
+                "chunk_excerpt_chars": max(900, int(doc_cfg.get("chunk_excerpt_chars") or 700)),
+            }
+        })
+    doc_grounding = build_document_grounding(message, session, doc_settings)
     web_grounding = build_web_grounding(message, settings)
     overview = grounding_overview(doc_grounding, web_grounding)
     grounded_text = build_grounding_text(doc_grounding, web_grounding)
@@ -885,23 +1020,30 @@ def orchestrate(message, session, settings, api_keys, attachments=None):
         return result["text"]
 
     if route == "groq_only":
+        builder_system = PDF_ANALYZER_SYSTEM if pdf_mode else systems["builder"]
         final = run_step(
             "Direct answer",
             ["groq", "gemini", "claude"],
-            BUILDER_SYSTEM,
+            builder_system,
             (
-                f"{context_pack}\n\n{overview}\n\nLatest user request:\n{message}\n\n"
-                f"Grounded context:\n{grounded_text or 'None'}\n\n"
-                "Instructions:\n"
-                "- If web sources are provided, cite them inline like [1], [2].\n"
-                "- If document snippets are provided, cite them like [D1], [D2].\n"
-                "- Do not invent citations.\n\n"
-                "Write the best final answer."
-            ).strip(),
-            settings["budgets"]["builder"],
+                make_pdf_analyze_prompt(message, context_pack, grounded_text)
+                if pdf_mode
+                else (
+                    f"{context_pack}\n\n{overview}\n\nLatest user request:\n{message}\n\n"
+                    f"Grounded context:\n{grounded_text or 'None'}\n\n"
+                    "Instructions:\n"
+                    "- If web sources are provided, cite them inline like [1], [2].\n"
+                    "- If document snippets are provided, cite them like [D1], [D2].\n"
+                    "- Do not invent citations.\n\n"
+                    "Write the best final answer."
+                ).strip()
+            ),
+            budgets["builder"],
         )
         return {
             "route": route,
+            "thinking": thinking,
+            "pdf_mode": pdf_mode,
             "final": final,
             "trace": trace,
             "usage": usage,
@@ -913,25 +1055,35 @@ def orchestrate(message, session, settings, api_keys, attachments=None):
     plan_text = run_step(
         "Plan",
         ["claude", "gemini", "groq"],
-        PLANNER_SYSTEM,
+        systems["planner"],
         make_plan_prompt(message, context_pack, overview),
-        settings["budgets"]["planner"],
+        budgets["planner"],
     )
 
     research_text = run_step(
         "Research / critique",
         ["groq", "gemini", "claude"],
-        RESEARCH_SYSTEM,
+        systems["research"],
         make_research_prompt(message, context_pack, plan_text, grounded_text),
-        settings["budgets"]["research"],
+        budgets["research"],
     )
+
+    reason_text = ""
+    if thinking:
+        reason_text = run_step(
+            "Deep reasoning",
+            ["claude", "gemini", "groq"],
+            REASON_SYSTEM,
+            make_reason_prompt(message, context_pack, plan_text, research_text, grounded_text),
+            budgets["reason"],
+        )
 
     draft_text = run_step(
         "Build",
         ["gemini", "claude", "groq"],
-        BUILDER_SYSTEM,
-        make_builder_prompt(message, context_pack, plan_text, research_text, grounded_text),
-        settings["budgets"]["builder"],
+        PDF_ANALYZER_SYSTEM if pdf_mode else systems["builder"],
+        make_builder_prompt(message, context_pack, plan_text, research_text, grounded_text, reason_text),
+        budgets["builder"],
     )
 
     final_text = draft_text
@@ -939,13 +1091,15 @@ def orchestrate(message, session, settings, api_keys, attachments=None):
         final_text = run_step(
             "Verify",
             ["claude", "gemini", "groq"],
-            VERIFIER_SYSTEM,
+            systems["verifier"],
             make_verifier_prompt(message, context_pack, plan_text, research_text, draft_text, grounded_text),
-            settings["budgets"]["verifier"],
+            budgets["verifier"],
         )
 
     return {
         "route": route,
+        "thinking": thinking,
+        "pdf_mode": pdf_mode,
         "final": final_text,
         "trace": trace,
         "usage": usage,
@@ -1033,6 +1187,8 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {
             "sessionId": session_id,
             "route": result["route"],
+            "thinking": result.get("thinking", False),
+            "pdfMode": result.get("pdf_mode", False),
             "final": result["final"],
             "trace": result["trace"],
             "usage": result["usage"],
