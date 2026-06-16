@@ -3,155 +3,323 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tri-Model Collective Chat</title>
+  <title>Collective AI — Tri-Model Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0b1020;
-      --panel: #121933;
-      --panel-2: #0f1530;
-      --line: #273156;
-      --text: #e9edff;
-      --muted: #9ba7d6;
-      --accent: #7c9cff;
-      --accent-2: #5de4c7;
-      --danger: #ff8a8a;
-      --warning: #ffd166;
-      --shadow: 0 16px 40px rgba(0,0,0,.25);
-      --radius: 18px;
+      --bg: #fffaeb;
+      --surface: #ffffff;
+      --surface-cream: #fff8e0;
+      --surface-muted: #fafafa;
+      --ink: #1f1f1f;
+      --ink-soft: #3d3d3d;
+      --muted: #6b6560;
+      --line: #e6d5a8;
+      --line-strong: rgba(31, 31, 31, 0.12);
+      --primary: #fa520f;
+      --primary-deep: #cc3a05;
+      --sunshine: #ffa110;
+      --yellow: #ffd900;
+      --success: #2d6a4f;
+      --danger: #c0392b;
+      --warning: #b45309;
+      --shadow-sm: 0 1px 2px rgba(31, 31, 31, 0.04);
+      --shadow: 0 4px 24px rgba(31, 31, 31, 0.06);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --sunset: linear-gradient(90deg, #fa520f 0%, #ffa110 25%, #ffb83e 50%, #ffd900 75%, #fff8e0 100%);
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: linear-gradient(180deg, #0b1020 0%, #0a0e1c 100%);
-      color: var(--text);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 250, 235, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .header-inner {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--sunset);
+      flex-shrink: 0;
+      box-shadow: var(--shadow-sm);
+    }
+    .brand-text {
+      min-width: 0;
+    }
+    .brand-name {
+      font-family: "DM Serif Display", Georgia, serif;
+      font-size: 1.15rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .brand-tag {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .header-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--primary);
+      background: var(--surface-cream);
+      border: 1px solid var(--line);
+      padding: 6px 12px;
+      border-radius: 999px;
+      white-space: nowrap;
     }
     .wrap {
       max-width: 1320px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 24px;
       display: grid;
-      grid-template-columns: 360px 1fr;
-      gap: 20px;
-      min-height: 100vh;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+      min-height: calc(100vh - 66px);
     }
     .card {
-      background: linear-gradient(180deg, rgba(18,25,51,.95), rgba(15,21,48,.96));
-      border: 1px solid var(--line);
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
       border-radius: var(--radius);
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-sm);
     }
     .sidebar {
-      padding: 16px;
+      padding: 20px;
       position: sticky;
-      top: 20px;
-      height: calc(100vh - 40px);
+      top: 90px;
+      height: calc(100vh - 114px);
       overflow: auto;
+      background: var(--surface);
+    }
+    .sidebar::-webkit-scrollbar,
+    .messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    .sidebar::-webkit-scrollbar-thumb,
+    .messages::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 999px;
     }
     .main {
       display: grid;
       grid-template-rows: auto 1fr auto;
-      gap: 16px;
-      min-height: calc(100vh - 40px);
+      gap: 20px;
+      min-height: calc(100vh - 114px);
     }
-    .hero { padding: 18px; }
+    .hero {
+      padding: 28px 28px 24px;
+      background: linear-gradient(180deg, var(--surface) 0%, var(--surface-cream) 100%);
+    }
     h1, h2, h3, p { margin: 0; }
-    h1 { font-size: 1.45rem; margin-bottom: 8px; }
-    .sub { color: var(--muted); line-height: 1.5; font-size: .95rem; }
-    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    h1 {
+      font-family: "DM Serif Display", Georgia, serif;
+      font-size: clamp(1.6rem, 2.5vw, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 10px;
+      color: var(--ink);
+    }
+    h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    h3 {
+      font-size: 0.92rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .section-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .sub {
+      color: var(--ink-soft);
+      line-height: 1.65;
+      font-size: 0.95rem;
+      max-width: 62ch;
+    }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
     .pill {
       border: 1px solid var(--line);
-      padding: 6px 10px;
+      padding: 5px 11px;
       border-radius: 999px;
-      color: var(--muted);
-      font-size: .82rem;
-      background: rgba(255,255,255,.02);
+      color: var(--ink-soft);
+      font-size: 0.78rem;
+      font-weight: 500;
+      background: var(--surface-cream);
     }
-    .pill.ok { color: var(--accent-2); }
-    .pill.warn { color: var(--warning); }
+    .pill.ok { color: var(--success); background: #ecfdf5; border-color: #a7f3d0; }
+    .pill.warn { color: var(--warning); background: #fffbeb; border-color: #fde68a; }
     .section {
-      padding: 14px 0;
-      border-top: 1px solid rgba(255,255,255,.06);
+      padding: 18px 0;
+      border-top: 1px solid var(--line-strong);
     }
-    .section:first-of-type { border-top: 0; }
+    .section:first-of-type { border-top: 0; padding-top: 0; }
     label {
       display: block;
-      font-size: .84rem;
-      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--ink-soft);
       margin-bottom: 6px;
     }
     input, select, textarea, button { font: inherit; }
     input, select, textarea {
       width: 100%;
-      background: rgba(255,255,255,.03);
-      color: var(--text);
-      border: 1px solid var(--line);
-      border-radius: 12px;
+      background: var(--surface);
+      color: var(--ink);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
       padding: 10px 12px;
       outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    input:hover, select:hover, textarea:hover {
+      border-color: var(--line);
     }
     input:focus, select:focus, textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(124,156,255,.15);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(250, 82, 15, 0.12);
     }
-    textarea { min-height: 96px; resize: vertical; }
-    .stack { display: grid; gap: 10px; }
+    input::placeholder, textarea::placeholder { color: #9ca3af; }
+    textarea { min-height: 110px; resize: vertical; line-height: 1.55; }
+    .stack { display: grid; gap: 12px; }
     .grid2 { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
     .grid3 { display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); }
+    .cost-grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
     .btn {
       border: 0;
-      border-radius: 12px;
-      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
       cursor: pointer;
-      transition: .18s ease;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
     }
     .btn.primary {
-      background: linear-gradient(135deg, var(--accent), #9a7cff);
-      color: white;
-      font-weight: 700;
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn.primary:hover:not(:disabled) {
+      background: var(--primary-deep);
+      transform: translateY(-1px);
     }
     .btn.secondary {
-      background: rgba(255,255,255,.04);
-      border: 1px solid var(--line);
-      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      color: var(--ink);
     }
-    .btn:hover { transform: translateY(-1px); }
+    .btn.secondary:hover:not(:disabled) {
+      background: var(--surface-cream);
+      border-color: var(--line);
+    }
     .messages {
-      padding: 16px;
+      padding: 24px;
       overflow: auto;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
+      min-height: 420px;
+      background: var(--surface-muted);
+    }
+    .messages:empty::before {
+      content: "Start a conversation — your messages will appear here.";
+      color: var(--muted);
+      font-size: 0.92rem;
+      text-align: center;
+      margin: auto;
+      padding: 48px 24px;
+      display: block;
     }
     .msg {
-      max-width: 92%;
-      padding: 14px 15px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
+      max-width: 88%;
+      padding: 14px 16px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
       white-space: pre-wrap;
-      line-height: 1.55;
+      line-height: 1.6;
+      font-size: 0.94rem;
+      box-shadow: var(--shadow-sm);
     }
-    .msg.user { align-self: flex-end; background: rgba(124,156,255,.12); }
-    .msg.assistant { background: rgba(255,255,255,.03); }
-    .meta { margin-top: 8px; color: var(--muted); font-size: .78rem; }
-    .composer { padding: 16px; }
+    .msg.user {
+      align-self: flex-end;
+      background: var(--surface-cream);
+      border-color: var(--line);
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: var(--surface);
+    }
+    .meta {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line-strong);
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+    .composer {
+      padding: 20px 24px 24px;
+      background: var(--surface);
+    }
     .compose-row {
       display: grid;
-      grid-template-columns: 1fr 220px;
-      gap: 12px;
+      grid-template-columns: 1fr 180px;
+      gap: 16px;
       align-items: end;
     }
     .trace {
       margin-top: 14px;
-      border-top: 1px dashed rgba(255,255,255,.1);
+      border-top: 1px dashed var(--line);
       padding-top: 12px;
       display: grid;
       gap: 10px;
     }
     .trace-item {
-      border: 1px solid rgba(255,255,255,.08);
-      background: rgba(255,255,255,.02);
-      border-radius: 14px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface-muted);
+      border-radius: var(--radius-sm);
       overflow: hidden;
     }
     .trace-head {
@@ -159,68 +327,141 @@
       display: flex;
       justify-content: space-between;
       gap: 8px;
-      border-bottom: 1px solid rgba(255,255,255,.06);
-      font-size: .84rem;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--line-strong);
+      font-size: 0.8rem;
       color: var(--muted);
+      background: var(--surface);
     }
+    .trace-head strong { color: var(--ink); }
     .trace-body {
       padding: 12px;
       white-space: pre-wrap;
-      line-height: 1.5;
-      font-size: .92rem;
+      line-height: 1.55;
+      font-size: 0.86rem;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--ink-soft);
     }
-    .status { color: var(--muted); font-size: .85rem; }
-    .error { color: var(--danger); margin-top: 8px; white-space: pre-wrap; font-size: .9rem; }
-    .ok { color: var(--accent-2); }
-    details summary { cursor: pointer; color: var(--muted); margin-top: 10px; }
-    .tiny { color: var(--muted); font-size: .8rem; line-height: 1.5; }
-    .route { color: var(--warning); }
+    .status { color: var(--muted); font-size: 0.84rem; }
+    .error { color: var(--danger); margin-top: 8px; white-space: pre-wrap; font-size: 0.88rem; }
+    .ok { color: var(--success); font-weight: 500; }
+    details summary {
+      cursor: pointer;
+      color: var(--primary);
+      margin-top: 10px;
+      font-weight: 500;
+      font-size: 0.84rem;
+    }
+    details summary:hover { color: var(--primary-deep); }
+    .tiny {
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.55;
+    }
+    .tiny ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+    .tiny li + li { margin-top: 4px; }
+    .route { color: var(--primary); font-weight: 600; }
     .mini-list { display: grid; gap: 8px; margin-top: 10px; }
     .mini-item {
       padding: 10px 12px;
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 12px;
-      background: rgba(255,255,255,.02);
-      font-size: .82rem;
-      color: var(--muted);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+      font-size: 0.82rem;
+      color: var(--ink-soft);
       line-height: 1.45;
     }
+    .mini-item a {
+      color: var(--primary);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    .mini-item a:hover { text-decoration: underline; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
     .toolbar .btn { flex: 1 1 auto; }
     .file-box {
-      border: 1px dashed rgba(255,255,255,.15);
-      border-radius: 14px;
-      padding: 12px;
-      background: rgba(255,255,255,.02);
+      border: 1px dashed var(--line);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      background: var(--surface-cream);
     }
     .check-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 10px;
+      padding: 10px 12px;
+      background: var(--surface-muted);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line-strong);
     }
     .check-row input[type="checkbox"] {
       width: auto;
-      accent-color: var(--accent);
+      margin-top: 3px;
+      accent-color: var(--primary);
     }
     .check-row label {
       margin: 0;
-      color: var(--text);
+      color: var(--ink);
       cursor: pointer;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    .section-label {
+      margin-top: 4px;
+    }
+    .provider-label {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .status-line {
+      margin-top: 10px;
+    }
+    .sunset-bar {
+      height: 4px;
+      background: var(--sunset);
+    }
+    .app-footer {
+      padding: 20px 24px 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      background: var(--surface-cream);
     }
     @media (max-width: 1080px) {
-      .wrap { grid-template-columns: 1fr; }
-      .sidebar { position: static; height: auto; }
+      .wrap { grid-template-columns: 1fr; padding: 16px; }
+      .sidebar { position: static; height: auto; top: auto; }
       .main { min-height: auto; }
       .compose-row { grid-template-columns: 1fr; }
+      .header-badge { display: none; }
+      .hero { padding: 22px 20px; }
+      .messages { min-height: 320px; }
     }
   </style>
 </head>
 <body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div class="brand-text">
+          <div class="brand-name">Collective AI</div>
+          <div class="brand-tag">Tri-model orchestration</div>
+        </div>
+      </div>
+      <span class="header-badge">Local server</span>
+    </div>
+  </header>
+
   <div class="wrap">
     <aside class="card sidebar">
       <div>
+        <div class="section-title">Configuration</div>
         <h2>Settings</h2>
-        <p class="sub" style="margin-top:8px;">Token-saving collective chat. It can route to one model, all three, or all three plus a verifier. Now with optional live web grounding, file uploads, and local cost estimation.</p>
+        <p class="sub section-label">Token-saving collective chat with optional web grounding, file uploads, and cost estimation.</p>
       </div>
 
       <div class="section stack">
@@ -242,6 +483,7 @@
       </div>
 
       <div class="section stack">
+        <div class="section-title">API keys</div>
         <div>
           <label for="claudeKey">Claude API key</label>
           <input id="claudeKey" type="password" placeholder="sk-ant-..." />
@@ -258,6 +500,7 @@
       </div>
 
       <div class="section stack">
+        <div class="section-title">Models</div>
         <div>
           <label for="claudeModel">Claude model</label>
           <input id="claudeModel" value="claude-3-5-haiku-latest" />
@@ -273,6 +516,7 @@
       </div>
 
       <div class="section stack">
+        <div class="section-title">Web search</div>
         <div>
           <label for="webSearchMode">Web search grounding</label>
           <select id="webSearchMode">
@@ -295,7 +539,8 @@
       </div>
 
       <div class="section stack">
-        <h3 style="font-size:1rem;">File uploads & PDF analyzer</h3>
+        <div class="section-title">Documents</div>
+        <h3 style="margin-bottom:4px;">File uploads & PDF analyzer</h3>
         <div class="file-box stack">
           <div>
             <label for="fileInput">Attach text files or PDFs</label>
@@ -315,11 +560,12 @@
       </div>
 
       <div class="section stack">
-        <h3 style="font-size:1rem;">Cost estimator</h3>
+        <div class="section-title">Pricing</div>
+        <h3 style="margin-bottom:4px;">Cost estimator</h3>
         <div class="tiny">Enter your actual USD rates per 1M tokens. Defaults are 0 until you set them.</div>
 
         <div class="stack">
-          <strong style="font-size:.9rem;">Claude</strong>
+          <strong class="provider-label">Claude</strong>
           <div class="cost-grid">
             <div>
               <label for="claudeInRate">Input / 1M</label>
@@ -333,7 +579,7 @@
         </div>
 
         <div class="stack">
-          <strong style="font-size:.9rem;">Groq</strong>
+          <strong class="provider-label">Groq</strong>
           <div class="cost-grid">
             <div>
               <label for="groqInRate">Input / 1M</label>
@@ -347,7 +593,7 @@
         </div>
 
         <div class="stack">
-          <strong style="font-size:.9rem;">Gemini</strong>
+          <strong class="provider-label">Gemini</strong>
           <div class="cost-grid">
             <div>
               <label for="geminiInRate">Input / 1M</label>
@@ -381,12 +627,12 @@
 
     <main class="main">
       <section class="card hero">
-        <h1>Tri-Model Collective Chat</h1>
-        <p class="sub">Claude plans, Groq critiques, Gemini builds, and optional verification tightens the final answer. Upload PDFs for analysis, enable thinking mode for harder questions, and use search or files to ground responses when needed.</p>
+        <h1>Frontier intelligence.<br>In your hands.</h1>
+        <p class="sub">Claude plans, Groq critiques, Gemini builds, and optional verification tightens the final answer. Upload PDFs, enable thinking mode, and ground responses with live search when needed.</p>
         <div class="pill-row">
           <span class="pill">Local server</span>
-          <span class="pill">Optional live web search</span>
-          <span class="pill">Upload docs/context</span>
+          <span class="pill">Live web search</span>
+          <span class="pill">Document upload</span>
           <span class="pill">PDF analyzer</span>
           <span class="pill">Thinking mode</span>
         </div>
@@ -399,7 +645,7 @@
           <div>
             <label for="prompt">Message</label>
             <textarea id="prompt" placeholder="Ask something complex, or upload files and ask questions about them."></textarea>
-            <div id="status" class="status" style="margin-top:8px;">Ready.</div>
+            <div id="status" class="status status-line">Ready.</div>
             <div id="error" class="error"></div>
           </div>
           <div class="stack">
@@ -410,6 +656,11 @@
       </section>
     </main>
   </div>
+
+  <div class="sunset-bar" aria-hidden="true"></div>
+  <footer class="app-footer">
+    Tri-Model Collective Chat — token-efficient multi-model orchestration
+  </footer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -612,7 +863,7 @@
             ${sources.length ? sources.map(source => `
               <div class="mini-item">
                 [${source.id}] ${esc(source.title || source.url)}<br>
-                <a href="${esc(source.url)}" target="_blank" rel="noreferrer" style="color:#9ec1ff;">${esc(source.url)}</a><br>
+                <a href="${esc(source.url)}" target="_blank" rel="noreferrer">${esc(source.url)}</a><br>
                 ${esc(source.excerpt || source.search_snippet || '')}
               </div>
             `).join('') : '<div class="mini-item">No results found.</div>'}
