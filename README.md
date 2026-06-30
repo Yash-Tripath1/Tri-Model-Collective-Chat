@@ -2,7 +2,7 @@
 A simple local app to chat with Claude, Groq, and Gemini.
 It can route prompts between models to save tokens.
 Optional web search can add live grounding.
-You can upload text files or PDFs for context — PDF text is extracted in the browser.
+You can upload text files or PDFs for context: PDF text is extracted in the browser.
 Turn on **Thinking mode** for deeper multi-step reasoning (extra reason step + verifier + higher token budgets).
 The app shows token usage and estimated cost.
 Run it with: `py app.py`
